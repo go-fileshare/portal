@@ -80,7 +80,7 @@ jobs:
       - uses: actions/setup-go@v7
         with: { go-version-file: go.mod, cache: true }
       - name: install fileshare
-        run: GOBIN="$RUNNER_TEMP/bin" go install github.com/go-fileshare/fileshare@v0.28.0
+        run: GOBIN="$RUNNER_TEMP/bin" go install github.com/go-fileshare/fileshare@v0.28.1
       - name: the e2e test, which must run rather than skip
         run: |
           set -o pipefail
