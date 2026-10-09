@@ -141,7 +141,8 @@ func TestHelpers(t *testing.T) {
 			t.Errorf("httpsOrLoopback(%q)", in)
 		}
 	}
-	if resolve("/b", "/a") != "/a" || resolve("/b", "a") != filepath.Join("/b", "a") {
+	abs := t.TempDir() // "/a" is not absolute on Windows
+	if resolve("/b", abs) != abs || resolve("/b", "a") != filepath.Join("/b", "a") {
 		t.Error("resolve")
 	}
 	if (&tokenError{Code: "x"}).Error() != "x" || (&tokenError{Code: "x", Description: "y"}).Error() != "x: y" {
