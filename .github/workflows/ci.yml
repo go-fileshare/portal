@@ -1,0 +1,97 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GOWORK: "off"
+  CGO_ENABLED: "0"
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go vet ./...
+      - name: gofmt
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          unformatted=$(gofmt -l $(git ls-files '*.go'))
+          if [ -n "$unformatted" ]; then
+            echo "::error::these files are not gofmt-clean:"; echo "$unformatted"; exit 1
+          fi
+      - run: go test -count=1 -v ./...
+
+  race:
+    name: race detector
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with: { go-version-file: go.mod, cache: true }
+      - run: go test -race -count=1 ./...
+
+  coverage:
+    name: coverage (floor recorded; the standard is 100%)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with: { go-version-file: go.mod, cache: true }
+      - run: |
+          set -o pipefail
+          FLOOR=93.0
+          go test -coverprofile=cover.out ./... >/dev/null
+          go tool cover -func=cover.out
+          cov=$(go tool cover -func=cover.out | tail -1 | awk '{print $3}' | tr -d '%')
+          echo "coverage: ${cov}%  floor: ${FLOOR}%  standard: 100%"
+          if awk -v c="$cov" -v f="$FLOOR" 'BEGIN{exit !(c+0 < f+0)}'; then
+            echo "::error::coverage ${cov}% fell below the recorded floor ${FLOOR}%"
+            exit 1
+          fi
+
+  # The portal in front of two REAL fileshare servers, the released binary:
+  # login, a token per server, calls to both, a change audited on the right
+  # one, and each server refusing the other's token.
+  e2e:
+    name: e2e against fileshare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with: { go-version-file: go.mod, cache: true }
+      - name: install fileshare
+        run: GOBIN="$RUNNER_TEMP/bin" go install github.com/go-fileshare/fileshare@v0.28.0
+      - name: the e2e test, which must run rather than skip
+        run: |
+          set -o pipefail
+          FILESHARE="$RUNNER_TEMP/bin/fileshare" go test -tags e2e -run E2E -count=1 -v . | tee e2e.log
+          grep -q -- '--- PASS: TestE2ETwoRealServers' e2e.log
+
+  vuln:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with: { go-version-file: go.mod, cache: true }
+      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
