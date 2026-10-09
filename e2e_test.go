@@ -8,7 +8,7 @@ package main
 // FILESHARE=/path/to/fileshare -- each with its admin API over HTTPS for
 // OIDC tokens (fileshare v0.28.0), and the test provider of idp_test.go.
 //
-//	go install github.com/go-fileshare/fileshare@v0.28.0
+//	go install github.com/go-fileshare/fileshare@v0.28.1
 //	FILESHARE=$(go env GOPATH)/bin/fileshare go test -tags e2e -run E2E -v .
 
 import (
