@@ -118,6 +118,22 @@ with PKCE (S256), `state`, `nonce`, and its secret at the token endpoint
   audience mappers do;
 - `https://<public_url>/callback` as a redirect URI.
 
+[go-authn/bridge](https://github.com/go-authn/bridge) does all of this from
+v0.21.0. List every server's `resource` in the client's `audience`, and give
+the client refresh tokens:
+
+```hcl
+client "portal" {
+  secret_file      = "/etc/authn-bridge/portal.secret"
+  redirect_uris    = ["https://files.example.org/callback"]
+  audience         = ["https://fs-paris.example.org/", "https://fs-lyon.example.org/"]
+  refresh_lifetime = "8h"
+}
+```
+
+Before v0.21.0, bridge ignored `resource` and addressed every token to the
+whole `audience`, which is exactly the token the portal is built to avoid.
+
 ## How tokens move
 
 ```
