@@ -3,8 +3,8 @@ module github.com/go-fileshare/portal
 go 1.27.2
 
 require (
-	github.com/go-authn/oidc v0.2.4
-	github.com/go-authn/servercert v0.5.0
+	github.com/go-authn/oidc v0.4.0
+	github.com/go-authn/servercert v0.5.1
 	github.com/hashicorp/hcl/v2 v2.25.0
 )
 
