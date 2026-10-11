@@ -8,7 +8,7 @@ package main
 // FILESHARE=/path/to/fileshare -- each with its admin API over HTTPS for
 // OIDC tokens (fileshare v0.28.0), and the test provider of idp_test.go.
 //
-//	go install github.com/go-fileshare/fileshare@v0.28.1
+//	go install github.com/go-fileshare/fileshare@v0.29.0
 //	FILESHARE=$(go env GOPATH)/bin/fileshare go test -tags e2e -run E2E -v .
 
 import (
@@ -29,6 +29,7 @@ import (
 
 type realServer struct {
 	addr, audience, data string
+	dav, files           string // the WebDAV listener, and the directory of share "files"
 	out                  *lockedBuffer
 }
 
@@ -49,6 +50,8 @@ func (l *lockedBuffer) String() string {
 	return l.b.String()
 }
 
+var davLine = regexp.MustCompile(`webdav\s+on (?:https://)?(127\.0\.0\.1:\d+)`)
+
 var adminLine = regexp.MustCompile(`https://(127\.0\.0\.1:\d+) — the admin API, for OIDC tokens`)
 
 // startFileshare runs the binary with an admin web listener trusting idp for
@@ -64,6 +67,8 @@ func startFileshare(t *testing.T, bin string, idp *testIdP, name, audience, cert
 	t.Cleanup(func() { os.RemoveAll(sock) })
 	roots := filepath.Join(dir, "roots")
 	_ = os.MkdirAll(filepath.Join(roots, "data"), 0o755)
+	files := filepath.Join(dir, "files")
+	_ = os.MkdirAll(files, 0o755)
 	writeSecret(t, filepath.Join(dir, "alice.pw"), "correct horse battery staple\n")
 	cfg := fmt.Sprintf(`name = %q
 user "alice" { password_file = %q }
@@ -71,7 +76,20 @@ tls {
   cert_file = %q
   key_file  = %q
 }
-serve "webdav" { addr = "127.0.0.1:0" }
+oidc {
+  issuer      = %q
+  audience    = %q
+  local_names = true   # the provider's alice is this file's alice
+}
+share "files" {
+  directory = %q
+  allow     = ["alice"]
+  writers   = ["alice"]
+}
+serve "webdav" {
+  addr = "127.0.0.1:0"
+  tls  = true
+}
 admin {
   listen       = "unix://%s/admin.sock"
   state_file   = %q
@@ -84,7 +102,7 @@ admin {
     }
   }
 }
-`, name, filepath.Join(dir, "alice.pw"), cert, key, sock, filepath.Join(dir, "shares.json"), roots, idp.issuer, audience)
+`, name, filepath.Join(dir, "alice.pw"), cert, key, idp.issuer, audience+"dav", files, sock, filepath.Join(dir, "shares.json"), roots, idp.issuer, audience)
 	path := filepath.Join(dir, "fileshare.hcl")
 	if err := os.WriteFile(path, []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
@@ -109,7 +127,12 @@ admin {
 	}()
 	select {
 	case addr := <-found:
-		return &realServer{addr: addr, audience: audience, data: filepath.Join(roots, "data"), out: out}
+		dav := davLine.FindStringSubmatch(out.String())
+		if dav == nil {
+			t.Fatalf("%s says nowhere that it serves WebDAV:\n%s", name, out)
+		}
+		return &realServer{addr: addr, audience: audience, data: filepath.Join(roots, "data"), out: out,
+			dav: dav[1], files: files}
 	case <-time.After(20 * time.Second):
 		t.Fatalf("%s never served its admin API:\n%s", name, out)
 	}

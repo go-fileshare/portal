@@ -122,6 +122,21 @@ type serverBlock struct {
 	// CAFile verifies the server's certificate when it is not publicly
 	// trusted.
 	CAFile string `hcl:"ca_file,optional"`
+	// DAVURL is the server's WebDAV listener, where its shares are -- what
+	// the explorer browses. Without it, the explorer does not reach this
+	// server.
+	DAVURL string `hcl:"dav_url,optional"`
+	// DAVResource is the audience fileshare's oidc block names, which WebDAV
+	// tokens are checked against. Empty means the same as resource.
+	DAVResource string `hcl:"dav_resource,optional"`
+}
+
+// davResource is the audience of this server's WebDAV tokens.
+func (s *serverBlock) davResource() string {
+	if s.DAVResource != "" {
+		return s.DAVResource
+	}
+	return s.Resource
 }
 
 type uiBlock struct {
@@ -246,11 +261,24 @@ func (c *config) check() error {
 			// 8707 §3).
 			return fmt.Errorf("server %q: neither resource nor scope: the token would not be addressed to this server alone", s.ID)
 		}
-		if s.Resource != "" {
-			if r, err := url.Parse(s.Resource); err != nil || !r.IsAbs() || r.Fragment != "" {
-				// RFC 8707 §2: an absolute URI, with no fragment.
-				return fmt.Errorf("server %q: resource %q must be an absolute URI without a fragment", s.ID, s.Resource)
+		for _, res := range []string{s.Resource, s.DAVResource} {
+			if res == "" {
+				continue
 			}
+			if r, err := url.Parse(res); err != nil || !r.IsAbs() || r.Fragment != "" {
+				// RFC 8707 §2: an absolute URI, with no fragment.
+				return fmt.Errorf("server %q: resource %q must be an absolute URI without a fragment", s.ID, res)
+			}
+		}
+		if s.DAVURL != "" {
+			if err := httpsOrLoopback(s.DAVURL); err != nil {
+				return fmt.Errorf("server %q: dav_url: %w", s.ID, err)
+			}
+		}
+		if s.DAVResource != "" && s.Resource == "" {
+			// The WebDAV audience is bought with a resource indicator; a
+			// server addressed by scope alone has no way to ask for it.
+			return fmt.Errorf("server %q: dav_resource needs resource as well", s.ID)
 		}
 	}
 
