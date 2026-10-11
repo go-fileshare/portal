@@ -8,8 +8,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/go-authn/oidc v0.4.0 h1:3G6p/129XjIaVkCN/n6Fqrf3Glb70wm65IkkEbyw1Fs=
 github.com/go-authn/oidc v0.4.0/go.mod h1:d46Qe8EHpNA5hadeFlUUYMHCDkYzwwNAP6AYu9KdxYk=
-github.com/go-authn/rp v0.1.0 h1:SVZ79HCpb3N8M7HOKrSulaj/ic7UR/WsE803+zWWEOw=
-github.com/go-authn/rp v0.1.0/go.mod h1:qM5qA1GxsYUlv0Y/wGcxDdk9tuUYKTNEn+3hJtp9YPI=
+github.com/go-authn/rp v0.1.1 h1:Ci7w4h2jngGk8qjShTehLcWVXmGigDjyI6zxxe0pLr0=
+github.com/go-authn/rp v0.1.1/go.mod h1:qM5qA1GxsYUlv0Y/wGcxDdk9tuUYKTNEn+3hJtp9YPI=
 github.com/go-authn/servercert v0.5.1 h1:eiF/dTsfwOFo844sDeKx1G2cvAq6sWCTb7MI8ZbbX3g=
 github.com/go-authn/servercert v0.5.1/go.mod h1:dX1m3PrNVvj62i/nXZz/Wm2mYoYhsFkUGHBqkTSfpng=
 github.com/go-jose/go-jose/v4 v4.1.4 h1:moDMcTHmvE6Groj34emNPLs/qtYXRVcd6S7NHbHz3kA=
