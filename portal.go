@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -16,6 +15,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/go-authn/rp"
 )
 
 // A portal is the server behind the UIs.
@@ -188,16 +189,10 @@ func (p *portal) callback(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	tr, err := pv.exchange(ctx, q.Get("code"), f.Verifier)
+	tr, id, err := pv.login(ctx, q.Get("code"), f)
 	if err != nil {
-		p.logf("login: code exchange at %s: %v", f.Issuer, err)
-		loginFailed(w, "The provider did not accept the login.")
-		return
-	}
-	id, err := pv.verifyID(ctx, tr.IDToken, f.Nonce)
-	if err != nil {
-		p.logf("login: ID token from %s: %v", f.Issuer, err)
-		loginFailed(w, "The provider's answer could not be verified.")
+		p.logf("login: at %s: %v", f.Issuer, err)
+		loginFailed(w, "The provider did not accept the login, or its answer could not be verified.")
 		return
 	}
 	if tr.RefreshToken == "" {
@@ -323,8 +318,7 @@ func (p *portal) refresh(w http.ResponseWriter, r *http.Request) {
 	for _, sb := range want {
 		tr, err := pv.refresh(ctx, s.Refresh, sb)
 		if err != nil {
-			var te *tokenError
-			if errors.As(err, &te) && te.Code == "invalid_grant" {
+			if rp.IsInvalidGrant(err) {
 				// The grant is over -- expired, revoked, or a rotated
 				// token replayed somewhere. Only a new login helps.
 				p.logf("refresh: %s %s: %v", s.Issuer, s.Subject, err)
@@ -343,8 +337,8 @@ func (p *portal) refresh(w http.ResponseWriter, r *http.Request) {
 		if tr.RefreshToken != "" {
 			s.Refresh = tr.RefreshToken
 		}
-		exp := now.Add(time.Duration(tr.ExpiresIn) * time.Second)
-		if tr.ExpiresIn <= 0 {
+		exp := tr.Expiry
+		if exp.IsZero() {
 			exp = now.Add(5 * time.Minute)
 		}
 		tokens[sb.ID] = accessToken{Token: tr.AccessToken, Expires: exp}
@@ -367,16 +361,10 @@ func (p *portal) logout(w http.ResponseWriter, r *http.Request) {
 	out := map[string]string{}
 	if s != nil {
 		p.logf("logout: %s %s", s.Issuer, s.Subject)
-		if pv := p.providers[s.Issuer]; pv != nil && pv.endURL != "" {
-			// OIDC RP-Initiated Logout 1.0 §2: client_id identifies the
-			// client when there is no id_token_hint to.
-			q := url.Values{"client_id": {pv.cfg.ClientID},
-				"post_logout_redirect_uri": {strings.TrimSuffix(p.cfg.public.String(), "/") + "/"}}
-			sep := "?"
-			if strings.Contains(pv.endURL, "?") {
-				sep = "&"
+		if pv := p.providers[s.Issuer]; pv != nil {
+			if end := pv.endSession(strings.TrimSuffix(p.cfg.public.String(), "/") + "/"); end != "" {
+				out["end_session"] = end
 			}
-			out["end_session"] = pv.endURL + sep + q.Encode()
 		}
 	}
 	writeJSON(w, http.StatusOK, out)

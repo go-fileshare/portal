@@ -145,7 +145,4 @@ func TestHelpers(t *testing.T) {
 	if resolve("/b", abs) != abs || resolve("/b", "a") != filepath.Join("/b", "a") {
 		t.Error("resolve")
 	}
-	if (&tokenError{Code: "x"}).Error() != "x" || (&tokenError{Code: "x", Description: "y"}).Error() != "x: y" {
-		t.Error("tokenError")
-	}
 }

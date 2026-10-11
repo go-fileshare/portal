@@ -106,7 +106,9 @@ and exits.
 
 The portal is a **confidential client** using the authorization code flow
 with PKCE (S256), `state`, `nonce`, and its secret at the token endpoint
-(`client_secret_basic`). It needs:
+(`client_secret_basic`). The protocol itself is
+[go-authn/rp](https://github.com/go-authn/rp), which the native console shares.
+It needs:
 
 - **refresh tokens** for the client (`offline_access`, or the provider's
   equivalent). The login's own access token is not used: each server's token
