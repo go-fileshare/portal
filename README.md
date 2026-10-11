@@ -216,8 +216,11 @@ What a UI behind the portal needs of it, as a package:
 - `EnsureToken`, which buys the token before a download, because a navigation
   cannot refresh and retry.
 
-A browser serializes refreshes across tabs with the Web Locks API; the
-go-fileshare console and explorer pass that lock in. The package is tested
+A browser serializes refreshes across tabs with the Web Locks API:
+`client.New(origin, nil, client.WebLocks(client.RefreshLock))`. Every UI must
+take that **one** lock name: the UIs share the portal's origin, hence one
+session cookie and one refresh token, and a console tab refreshing beside an
+explorer tab would spend it twice. The package is tested
 against the real portal handler, not a stand-in.
 
 ## Cookies
