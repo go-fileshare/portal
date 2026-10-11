@@ -16,8 +16,10 @@ balancer, with the same configuration and the same session keys: any copy
 serves any request.
 
 This is phase 2 of the [UI design](https://github.com/go-fileshare/fileshare/blob/main/docs/ui.md).
-The admin console and the file explorer, the two UIs it serves, are phases 3
-and 4.
+The two UIs it serves are phases 3 and 4:
+[go-fileshare/console](https://github.com/go-fileshare/console), the admin
+console, and [go-fileshare/explorer](https://github.com/go-fileshare/explorer),
+the file explorer.
 
 ## Why a server in the middle
 
@@ -175,6 +177,8 @@ The go-fileshare explorer reaches a server's shares through the portal too:
 token addressed to it. The audience is fileshare's `oidc` block's, or
 `dav_resource` when it differs from the admin API's.
 
+- **The root:** `/dav/<server>/` lists the shares the person may open (a
+  PROPFIND of fileshare's `/`, which answers one from v0.29.0).
 - **What passes:** GET, HEAD, PUT, DELETE, PROPFIND (`Depth: 0` or `1`), MKCOL,
   MOVE, COPY. Nothing else (no LOCK, no PROPPATCH).
 - **Destination:** a MOVE's or COPY's must be on the same server, under
@@ -287,8 +291,6 @@ the rotated refresh token, and `SameSite=Strict`.
 
 ## Not yet
 
-- The UIs themselves: phases 3 and 4.
-- The explorer's WebDAV through the portal (chunked `Content-Range` uploads).
 - ACME for the portal's own certificate. go-authn/servercert has it; the
   configuration does not expose it yet.
 - Servers behind different issuers in one session. A session belongs to one
