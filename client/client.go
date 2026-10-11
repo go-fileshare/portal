@@ -83,6 +83,13 @@ const RequestHeader = "Portal-Request"
 // bounds (8 KiB of header at nginx's default); five tokens of about 1 KB fit.
 const MaxInUse = 5
 
+// RefreshLock is the name of the lock every UI of a portal takes around a
+// refresh (WebLocks(RefreshLock) in a browser). It must be ONE name: the
+// UIs a portal serves share its origin, so they share one session cookie and
+// one refresh token, and a console tab and an explorer tab refreshing at
+// once would spend that token twice.
+const RefreshLock = "fileshare-portal-refresh"
+
 // Portal is a client of go-fileshare/portal.
 type Portal struct {
 	base string

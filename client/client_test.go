@@ -202,3 +202,13 @@ func TestUnreadableBody(t *testing.T) {
 type errReader struct{}
 
 func (errReader) Read([]byte) (int, error) { return 0, errors.New("broken") }
+
+// The lock name is a contract between UIs released separately: the console
+// v0.3.1 and the explorer v0.1.0 spell it out. Renaming it would let a new
+// UI and an old one refresh at once, which spends a rotated refresh token
+// twice and ends the login.
+func TestRefreshLockNameIsStable(t *testing.T) {
+	if RefreshLock != "fileshare-portal-refresh" {
+		t.Fatalf("RefreshLock is %q: UIs already released take \"fileshare-portal-refresh\"", RefreshLock)
+	}
+}
