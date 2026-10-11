@@ -60,7 +60,7 @@ jobs:
       - run: |
           set -o pipefail
           FLOOR=93.0
-          go test -coverprofile=cover.out ./... >/dev/null
+          go test -coverprofile=cover.out -coverpkg=./... ./... >/dev/null
           go tool cover -func=cover.out
           cov=$(go tool cover -func=cover.out | tail -1 | awk '{print $3}' | tr -d '%')
           echo "coverage: ${cov}%  floor: ${FLOOR}%  standard: 100%"
@@ -80,12 +80,13 @@ jobs:
       - uses: actions/setup-go@v7
         with: { go-version-file: go.mod, cache: true }
       - name: install fileshare
-        run: GOBIN="$RUNNER_TEMP/bin" go install github.com/go-fileshare/fileshare@v0.28.1
+        run: GOBIN="$RUNNER_TEMP/bin" go install github.com/go-fileshare/fileshare@v0.29.0
       - name: the e2e test, which must run rather than skip
         run: |
           set -o pipefail
           FILESHARE="$RUNNER_TEMP/bin/fileshare" go test -tags e2e -run E2E -count=1 -v . | tee e2e.log
           grep -q -- '--- PASS: TestE2ETwoRealServers' e2e.log
+          grep -q -- '--- PASS: TestE2EDAVThroughThePortal' e2e.log
 
   vuln:
     name: govulncheck

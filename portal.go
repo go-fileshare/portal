@@ -39,8 +39,10 @@ type portal struct {
 	servers   map[string]*serverBlock
 	sessions  *sessions
 	proxy     *proxy
-	now       func() time.Time
-	logf      func(format string, args ...any)
+	// davTargets are the servers' WebDAV listeners, by server ID (dav.go).
+	davTargets map[string]*davTarget
+	now        func() time.Time
+	logf       func(format string, args ...any)
 }
 
 const requestHeader = "Portal-Request"
@@ -69,6 +71,10 @@ func newPortal(ctx context.Context, cfg *config, client *http.Client) (*portal, 
 	if err != nil {
 		return nil, err
 	}
+	p.davTargets, err = newDAV(cfg.Servers)
+	if err != nil {
+		return nil, err
+	}
 	return p, nil
 }
 
@@ -80,6 +86,7 @@ func (p *portal) handler() http.Handler {
 	mux.Handle("POST /session/refresh", p.fetchOnly(p.refresh))
 	mux.Handle("POST /logout", p.fetchOnly(p.logout))
 	mux.Handle("POST /api/{server}/{rpc...}", p.fetchOnly(p.api))
+	mux.HandleFunc("/dav/{server}/{path...}", p.dav)
 	mux.Handle("/", newStatic(p.cfg.UIs))
 	return securityHeaders(mux)
 }
@@ -88,21 +95,10 @@ func (p *portal) handler() http.Handler {
 // and -- when the browser says -- the same origin. Anything else is refused
 // before it is read.
 func (p *portal) fetchOnly(h http.HandlerFunc) http.Handler {
-	origin := strings.TrimSuffix(p.cfg.public.String(), "/")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get(requestHeader) != "1" {
-			jsonError(w, http.StatusForbidden, "permission_denied", "a request the portal's pages did not send")
-			return
+		if p.fromPage(w, r) {
+			h(w, r)
 		}
-		if o := r.Header.Get("Origin"); o != "" && o != origin {
-			jsonError(w, http.StatusForbidden, "permission_denied", "a request from another origin")
-			return
-		}
-		if s := r.Header.Get("Sec-Fetch-Site"); s != "" && s != "same-origin" {
-			jsonError(w, http.StatusForbidden, "permission_denied", "a request from another site")
-			return
-		}
-		h(w, r)
 	})
 }
 
@@ -237,6 +233,7 @@ type serverView struct {
 	ID        string     `json:"id"`
 	Label     string     `json:"label,omitempty"`
 	Reachable bool       `json:"reachable"` // its issuer is this session's
+	DAV       bool       `json:"dav"`       // it serves WebDAV here: the explorer can browse it
 	Token     *time.Time `json:"token_expires,omitempty"`
 }
 
@@ -251,7 +248,7 @@ type sessionView struct {
 func (p *portal) view(s *session) sessionView {
 	v := sessionView{Issuer: s.Issuer, Subject: s.Subject, Name: s.Name, Expires: s.Expires, Servers: []serverView{}}
 	for _, sb := range p.cfg.Servers {
-		sv := serverView{ID: sb.ID, Label: sb.Label, Reachable: sb.Issuer == s.Issuer}
+		sv := serverView{ID: sb.ID, Label: sb.Label, Reachable: sb.Issuer == s.Issuer, DAV: sb.DAVURL != ""}
 		if t, ok := s.Tokens[sb.ID]; ok {
 			e := t.Expires
 			sv.Token = &e
@@ -315,8 +312,23 @@ func (p *portal) refresh(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	now := p.now()
 	tokens := map[string]accessToken{}
+	// What to buy: each server's token, and its WebDAV token when that has
+	// an audience of its own.
+	type purchase struct {
+		key string
+		sb  *serverBlock
+		f   rp.For
+	}
+	var buys []purchase
 	for _, sb := range want {
-		tr, err := pv.refresh(ctx, s.Refresh, sb)
+		buys = append(buys, purchase{sb.ID, sb, rp.For{Resource: sb.Resource, Scope: sb.Scope}})
+		if sb.DAVURL != "" && sb.davResource() != sb.Resource {
+			buys = append(buys, purchase{sb.ID + davKey, sb, rp.For{Resource: sb.davResource()}})
+		}
+	}
+	for _, b := range buys {
+		sb := b.sb
+		tr, err := pv.buy(ctx, s.Refresh, b.f)
 		if err != nil {
 			if rp.IsInvalidGrant(err) {
 				// The grant is over -- expired, revoked, or a rotated
@@ -341,7 +353,7 @@ func (p *portal) refresh(w http.ResponseWriter, r *http.Request) {
 		if exp.IsZero() {
 			exp = now.Add(5 * time.Minute)
 		}
-		tokens[sb.ID] = accessToken{Token: tr.AccessToken, Expires: exp}
+		tokens[b.key] = accessToken{Token: tr.AccessToken, Expires: exp}
 	}
 	s.Tokens = tokens
 	if err := p.sessions.write(w, r, s); err != nil {

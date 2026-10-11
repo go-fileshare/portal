@@ -16,8 +16,10 @@ balancer, with the same configuration and the same session keys: any copy
 serves any request.
 
 This is phase 2 of the [UI design](https://github.com/go-fileshare/fileshare/blob/main/docs/ui.md).
-The admin console and the file explorer, the two UIs it serves, are phases 3
-and 4.
+The two UIs it serves are phases 3 and 4:
+[go-fileshare/console](https://github.com/go-fileshare/console), the admin
+console, and [go-fileshare/explorer](https://github.com/go-fileshare/explorer),
+the file explorer.
 
 ## Why a server in the middle
 
@@ -58,6 +60,11 @@ server "paris" {
   resource = "https://fs-paris.example.org/"       # RFC 8707: the token's audience
   # ca_file = "/etc/portal/fs-ca.pem"              # if its certificate is not publicly trusted
 }
+
+# a server whose shares the explorer browses: its WebDAV, and the audience
+# fileshare's oidc block names (defaults to resource)
+#   dav_url      = "https://fs-paris.example.org"
+#   dav_resource = "https://fs-paris.example.org/dav/"
 
 server "lyon" {
   url      = "https://fs-lyon.example.org:8443"
@@ -163,6 +170,56 @@ tabs, with the browser's Web Locks API. If a refresh is lost anyway (the
 answer never reaches the browser), the grant ends and the person logs in
 again: the failure is a login, never a token that works for someone else.
 
+## Files, for the explorer: `/dav/<server>/<share>/<path>`
+
+The go-fileshare explorer reaches a server's shares through the portal too:
+`/dav/<server>/<share>/<path>` is that server's WebDAV (`dav_url`), with a
+token addressed to it. The audience is fileshare's `oidc` block's, or
+`dav_resource` when it differs from the admin API's.
+
+- **The root:** `/dav/<server>/` lists the shares the person may open (a
+  PROPFIND of fileshare's `/`, which answers one from v0.29.0).
+- **What passes:** GET, HEAD, PUT, DELETE, PROPFIND (`Depth: 0` or `1`), MKCOL,
+  MOVE, COPY. Nothing else (no LOCK, no PROPPATCH).
+- **Destination:** a MOVE's or COPY's must be on the same server, under
+  `/dav/<server>/`; it is rewritten to the server's URL.
+- **Size:** a PUT is at most 16 MiB. A larger file goes **in pieces**: an empty
+  PUT, then each piece with a `Content-Range` starting where the last ended
+  (fileshare v0.29.0), then a MOVE to its name.
+- **Downloads:** a GET is the one request that need not carry `Portal-Request`,
+  so that a download can be a plain navigation. One that another site starts
+  is refused (`Sec-Fetch-Site`). Every other method needs the header, as
+  `/api` does.
+
+⛔ **What a share holds is served inert.** A file on a share is whatever
+somebody put there, and served from the portal's origin, a page with a script
+would run *as the portal*. It could not read the `HttpOnly` cookie, but it
+could call `/api` and `/dav` as the person. So every `/dav` answer carries:
+
+- `Content-Security-Policy: sandbox; default-src 'none'`, in place of the
+  portal's own (the server's is dropped, not added beside it);
+- `X-Content-Type-Options: nosniff`;
+- for a download, `Content-Type: application/octet-stream` and
+  `Content-Disposition: attachment`.
+
+The server's `Set-Cookie` never passes.
+
+## The UIs' side: `github.com/go-fileshare/portal/client`
+
+What a UI behind the portal needs of it, as a package:
+
+- `Session`, `LoginURL` and `Logout`.
+- `Doer(server, maxBody)`, an HTTP client for `/api/<server>/...` or
+  `/dav/<server>/...`. It carries `Portal-Request`; on a `401` with
+  `Portal-Refresh`, it refreshes the servers in use, at most five, and sends the
+  request again.
+- `EnsureToken`, which buys the token before a download, because a navigation
+  cannot refresh and retry.
+
+A browser serializes refreshes across tabs with the Web Locks API; the
+go-fileshare console and explorer pass that lock in. The package is tested
+against the real portal handler, not a stand-in.
+
 ## Cookies
 
 | | |
@@ -208,7 +265,7 @@ passed back. A call is at most 1 MiB, as on fileshare's own listener.
 
 ```sh
 go test ./...
-go install github.com/go-fileshare/fileshare@v0.28.1
+go install github.com/go-fileshare/fileshare@v0.29.0
 FILESHARE=$(go env GOPATH)/bin/fileshare go test -tags e2e -run E2E -v .
 ```
 
@@ -234,8 +291,6 @@ the rotated refresh token, and `SameSite=Strict`.
 
 ## Not yet
 
-- The UIs themselves: phases 3 and 4.
-- The explorer's WebDAV through the portal (chunked `Content-Range` uploads).
 - ACME for the portal's own certificate. go-authn/servercert has it; the
   configuration does not expose it yet.
 - Servers behind different issuers in one session. A session belongs to one

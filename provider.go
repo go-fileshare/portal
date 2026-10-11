@@ -46,9 +46,10 @@ func (p *provider) login(ctx context.Context, code string, f *flow) (*rp.Token, 
 	return p.c.Exchange(ctx, code, rp.Flow{State: f.State, Nonce: f.Nonce, Verifier: f.Verifier})
 }
 
-// refresh buys an access token for one server with the refresh token.
-func (p *provider) refresh(ctx context.Context, rt string, s *serverBlock) (*rp.Token, error) {
-	return p.c.Refresh(ctx, rt, rp.For{Resource: s.Resource, Scope: s.Scope})
+// buy buys an access token with the refresh token: for one server's admin
+// API, or its WebDAV, as f says.
+func (p *provider) buy(ctx context.Context, rt string, f rp.For) (*rp.Token, error) {
+	return p.c.Refresh(ctx, rt, f)
 }
 
 // endSession is where to end the session at the provider, or "".
