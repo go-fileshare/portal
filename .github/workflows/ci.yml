@@ -60,7 +60,7 @@ jobs:
       - run: |
           set -o pipefail
           FLOOR=93.0
-          go test -coverprofile=cover.out ./... >/dev/null
+          go test -coverprofile=cover.out -coverpkg=./... ./... >/dev/null
           go tool cover -func=cover.out
           cov=$(go tool cover -func=cover.out | tail -1 | awk '{print $3}' | tr -d '%')
           echo "coverage: ${cov}%  floor: ${FLOOR}%  standard: 100%"

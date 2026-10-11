@@ -200,6 +200,22 @@ could call `/api` and `/dav` as the person. So every `/dav` answer carries:
 
 The server's `Set-Cookie` never passes.
 
+## The UIs' side: `github.com/go-fileshare/portal/client`
+
+What a UI behind the portal needs of it, as a package:
+
+- `Session`, `LoginURL` and `Logout`.
+- `Doer(server, maxBody)`, an HTTP client for `/api/<server>/...` or
+  `/dav/<server>/...`. It carries `Portal-Request`; on a `401` with
+  `Portal-Refresh`, it refreshes the servers in use, at most five, and sends the
+  request again.
+- `EnsureToken`, which buys the token before a download, because a navigation
+  cannot refresh and retry.
+
+A browser serializes refreshes across tabs with the Web Locks API; the
+go-fileshare console and explorer pass that lock in. The package is tested
+against the real portal handler, not a stand-in.
+
 ## Cookies
 
 | | |
