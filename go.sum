@@ -6,10 +6,10 @@ github.com/apparentlymart/go-textseg/v17 v17.0.1 h1:bpMXRgQ5cEoRNuQke1a80/Nl6w3G
 github.com/apparentlymart/go-textseg/v17 v17.0.1/go.mod h1:fa8X4jgGeevslICIY6LcdjkSecWnXmYd9Lk34z/VxZs=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/go-authn/oidc v0.4.1 h1:G1tjLAswrPUvOraciHrb+vOYSSHdMuCKBryrHrLTWHo=
-github.com/go-authn/oidc v0.4.1/go.mod h1:d46Qe8EHpNA5hadeFlUUYMHCDkYzwwNAP6AYu9KdxYk=
-github.com/go-authn/rp v0.1.1 h1:Ci7w4h2jngGk8qjShTehLcWVXmGigDjyI6zxxe0pLr0=
-github.com/go-authn/rp v0.1.1/go.mod h1:qM5qA1GxsYUlv0Y/wGcxDdk9tuUYKTNEn+3hJtp9YPI=
+github.com/go-authn/oidc v0.4.2 h1:sTcoLgpH4jaNhkQ5MwkmTRLI1Iwi1cGPyGunkMnZqiQ=
+github.com/go-authn/oidc v0.4.2/go.mod h1:d46Qe8EHpNA5hadeFlUUYMHCDkYzwwNAP6AYu9KdxYk=
+github.com/go-authn/rp v0.1.2 h1:gFkVWuSmf6qhour9gsSNhtkL470dc8mJtZAXQsi6z8U=
+github.com/go-authn/rp v0.1.2/go.mod h1:WmPMi6N6S1rCzfXXAyAgSAPwiG3fGBd2fmvM7mFJdgk=
 github.com/go-authn/servercert v0.5.2 h1:aCCo3FpHPWCwdhvjfDhP3ufVxdA8qW4nLhWKmwscFfQ=
 github.com/go-authn/servercert v0.5.2/go.mod h1:dX1m3PrNVvj62i/nXZz/Wm2mYoYhsFkUGHBqkTSfpng=
 github.com/go-jose/go-jose/v4 v4.1.4 h1:moDMcTHmvE6Groj34emNPLs/qtYXRVcd6S7NHbHz3kA=
