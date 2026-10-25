@@ -1,6 +1,6 @@
 module github.com/go-fileshare/portal
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/go-authn/oidc v0.4.1
