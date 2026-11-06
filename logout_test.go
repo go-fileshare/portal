@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -125,7 +126,7 @@ func TestRevocationsFile(t *testing.T) {
 		t.Fatal("a revoked id is not revoked")
 	}
 	st, err := os.Stat(file)
-	if err != nil || st.Mode().Perm() != 0o600 {
+	if err != nil || (runtime.GOOS != "windows" && st.Mode().Perm() != 0o600) { // Windows has no such mode
 		t.Fatalf("revocations file: %v %v", st, err)
 	}
 	// A restart: another set over the same file.
