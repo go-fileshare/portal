@@ -89,6 +89,13 @@ type sessionBlock struct {
 	// once when a token is 600 bytes, 5 at 1000 bytes, 3 at 1500. Raise it
 	// with the load balancer's limit, up to 45600.
 	MaxCookieBytes int `hcl:"max_cookie_bytes,optional"`
+	// RevocationsFile keeps the sessions a logout has ended, so that a copy of
+	// their cookie does not open them again (revoke.go). A session is sealed in
+	// the browser; this file is the one thing the portal remembers, and it is
+	// what makes a logout last across a restart. Copies of the portal that
+	// share the file see each other's logouts within a second. Without it the
+	// set is in memory and a restart forgets it.
+	RevocationsFile string `hcl:"revocations_file,optional"`
 
 	keys     [][]byte
 	lifetime time.Duration
@@ -240,6 +247,7 @@ func (c *config) check() error {
 		return errors.New("no server block: there would be nothing to manage")
 	}
 	var ids []string
+	audiences := map[string]string{} // audience -> the server it was first given to
 	for _, s := range c.Servers {
 		if !validID(s.ID) {
 			return fmt.Errorf("server %q: an id is 1 to 32 of a-z, 0-9 and -, as it appears in a path", s.ID)
@@ -269,6 +277,16 @@ func (c *config) check() error {
 				// RFC 8707 §2: an absolute URI, with no fragment.
 				return fmt.Errorf("server %q: resource %q must be an absolute URI without a fragment", s.ID, res)
 			}
+		}
+		// ⛔ Two servers addressed identically share their tokens: the one the
+		// portal buys for one is the other's, and whoever administers one can
+		// replay it at the other (RFC 8707 §3). A server's own WebDAV audience
+		// may equal its resource; another server's may not.
+		for _, aud := range audienceKeys(&s) {
+			if other, dup := audiences[aud]; dup && other != s.ID {
+				return fmt.Errorf("server %q: the audience %q is already server %q's: a token for one would be valid at the other", s.ID, aud, other)
+			}
+			audiences[aud] = s.ID
 		}
 		if s.DAVURL != "" {
 			if err := httpsOrLoopback(s.DAVURL); err != nil {
@@ -301,6 +319,9 @@ func (c *config) check() error {
 // readSecrets reads the session keys and the client secrets. A relative
 // path is relative to the configuration file.
 func (c *config) readSecrets(base string) error {
+	if c.Session.RevocationsFile != "" {
+		c.Session.RevocationsFile = resolve(base, c.Session.RevocationsFile)
+	}
 	for _, p := range c.Session.KeyFiles {
 		k, err := readKey(resolve(base, p))
 		if err != nil {
@@ -378,4 +399,31 @@ func httpsOrLoopback(raw string) error {
 		return nil
 	}
 	return fmt.Errorf("%q is not an https URL", raw)
+}
+
+// audienceKeys are what a server's tokens are addressed to, in a form that
+// makes two spellings of one audience equal: its resource and WebDAV resource
+// (an absolute URI, compared by scheme, host and path, the host in lower case
+// and a trailing "/" ignored) and, for a server addressed by scope, the scope.
+func audienceKeys(s *serverBlock) []string {
+	var out []string
+	for _, res := range []string{s.Resource, s.davResource()} {
+		if res == "" {
+			continue
+		}
+		k := res
+		if u, err := url.Parse(res); err == nil {
+			k = strings.ToLower(u.Scheme) + "://" + strings.ToLower(u.Host) + strings.TrimSuffix(u.Path, "/")
+			if u.RawQuery != "" {
+				k += "?" + u.RawQuery
+			}
+		}
+		if !slices.Contains(out, k) {
+			out = append(out, k)
+		}
+	}
+	if s.Resource == "" && s.Scope != "" {
+		out = append(out, "scope:"+s.Scope)
+	}
+	return out
 }

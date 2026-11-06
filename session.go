@@ -20,6 +20,9 @@ import (
 // and sealed -- and the page never needs them: it calls the portal, which
 // adds the token of the server the call is for (proxy.go).
 type session struct {
+	// ID names this login for the revocation set (revoke.go): a session without
+	// one, from before logouts could end a session, is not accepted.
+	ID      string    `json:"id"`
 	Issuer  string    `json:"iss"`
 	Subject string    `json:"sub"`
 	Name    string    `json:"name,omitempty"`
@@ -78,6 +81,8 @@ type sessions struct {
 	sealer *sealer
 	now    func() time.Time
 	limit  int // bytes of sealed session, all chunks together
+	// revoked is the set of sessions a logout ended (revoke.go).
+	revoked *revocations
 }
 
 // read returns the session the request carries, or nil when it carries none
@@ -101,6 +106,9 @@ func (ss *sessions) read(r *http.Request) *session {
 	var s session
 	if json.Unmarshal(plain, &s) != nil || !ss.now().Before(s.Expires) {
 		return nil
+	}
+	if !validSessionID(s.ID) || ss.revoked.revoked(s.ID) {
+		return nil // a session from before ids, or one a logout ended
 	}
 	return &s
 }
