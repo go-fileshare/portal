@@ -109,6 +109,7 @@ func (r *revocations) load(compact bool) error {
 	}
 	r.ids, r.size, r.mtime = ids, st.Size(), st.ModTime()
 	if compact && dropped > 0 {
+		f.Close() // Windows does not rename over a file that is open
 		return r.rewrite()
 	}
 	return nil
