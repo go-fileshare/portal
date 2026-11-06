@@ -54,7 +54,11 @@ func newPortal(ctx context.Context, cfg *config, client *http.Client) (*portal, 
 	}
 	p := &portal{cfg: cfg, providers: map[string]*provider{}, servers: map[string]*serverBlock{},
 		now: time.Now, logf: log.Printf}
-	p.sessions = &sessions{sealer: s, now: func() time.Time { return p.now() }, limit: cfg.Session.MaxCookieBytes}
+	rev, err := newRevocations(cfg.Session.RevocationsFile, func() time.Time { return p.now() })
+	if err != nil {
+		return nil, err
+	}
+	p.sessions = &sessions{sealer: s, now: func() time.Time { return p.now() }, limit: cfg.Session.MaxCookieBytes, revoked: rev}
 	redirect := strings.TrimSuffix(cfg.public.String(), "/") + "/callback"
 	for i := range cfg.Issuers {
 		is := &cfg.Issuers[i]
@@ -198,7 +202,7 @@ func (p *portal) callback(w http.ResponseWriter, r *http.Request) {
 		loginFailed(w, "The provider is not configured to let the portal act for you.")
 		return
 	}
-	s := &session{Issuer: f.Issuer, Subject: id.Subject(), Name: id.Username(),
+	s := &session{ID: newSessionID(), Issuer: f.Issuer, Subject: id.Subject(), Name: id.Username(),
 		Expires: p.now().Add(p.cfg.Session.lifetime), Refresh: tr.RefreshToken}
 	if err := p.sessions.write(w, r, s); err != nil {
 		loginFailed(w, "The session could not be stored.")
@@ -373,7 +377,23 @@ func (p *portal) logout(w http.ResponseWriter, r *http.Request) {
 	out := map[string]string{}
 	if s != nil {
 		p.logf("logout: %s %s", s.Issuer, s.Subject)
+		// A copy of the cookie must not open the session again, and a copy of
+		// its refresh token must not buy tokens: the session is put in the
+		// revocation set, and the refresh token is revoked at the provider.
+		if err := p.sessions.revoked.revoke(s.ID, s.Expires); err != nil {
+			p.logf("logout: %s %s: the session could not be revoked: %v", s.Issuer, s.Subject, err)
+			out["session_revoked"] = "false"
+		} else {
+			out["session_revoked"] = "true"
+		}
 		if pv := p.providers[s.Issuer]; pv != nil {
+			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			result, err := pv.revoke(ctx, s.Refresh)
+			cancel()
+			if err != nil {
+				p.logf("logout: %s %s: the refresh token could not be revoked: %v", s.Issuer, s.Subject, err)
+			}
+			out["refresh_token"] = result
 			if end := pv.endSession(strings.TrimSuffix(p.cfg.public.String(), "/") + "/"); end != "" {
 				out["end_session"] = end
 			}

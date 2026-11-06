@@ -45,6 +45,8 @@ type testIdP struct {
 	badNonce, noRefresh, noRotate, noS256, wrongIssuer bool
 	failRefreshFor                                     string // a resource whose refresh answers 500
 	extraAud                                           bool   // ID token with two audiences and no azp
+	revocation                                         bool   // discovery has a revocation_endpoint (RFC 7009)
+	revokedTokens                                      []string
 }
 
 type codeGrant struct {
@@ -64,6 +66,7 @@ func newTestIdP(t *testing.T) *testIdP {
 	mux.HandleFunc("GET /jwks", p.jwks)
 	mux.HandleFunc("GET /authorize", p.authorize)
 	mux.HandleFunc("POST /token", p.token)
+	mux.HandleFunc("POST /revoke", p.revoke)
 	p.srv = httptest.NewServer(mux)
 	t.Cleanup(p.srv.Close)
 	p.issuer = p.srv.URL
@@ -78,12 +81,33 @@ func (p *testIdP) discovery(w http.ResponseWriter, r *http.Request) {
 	d := map[string]any{"issuer": iss, "authorization_endpoint": p.issuer + "/authorize",
 		"token_endpoint": p.issuer + "/token", "jwks_uri": p.issuer + "/jwks",
 		"end_session_endpoint": p.issuer + "/logout?x=1"}
+	if p.revocation {
+		d["revocation_endpoint"] = p.issuer + "/revoke"
+	}
 	if p.noS256 {
 		d["code_challenge_methods_supported"] = []string{"plain"}
 	} else {
 		d["code_challenge_methods_supported"] = []string{"S256"}
 	}
 	_ = json.NewEncoder(w).Encode(d)
+}
+
+// revoke is RFC 7009: the family of the refresh token ends (and the call
+// answers 200 for a token it never issued too, §2.2).
+func (p *testIdP) revoke(w http.ResponseWriter, r *http.Request) {
+	if _, _, ok := r.BasicAuth(); !ok {
+		tokenErr(w, "invalid_client")
+		return
+	}
+	_ = r.ParseForm()
+	tok := r.PostForm.Get("token")
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.revokedTokens = append(p.revokedTokens, tok)
+	if fam, ok := p.live[tok]; ok {
+		p.revoked[fam] = true
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (p *testIdP) jwks(w http.ResponseWriter, r *http.Request) {

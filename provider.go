@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
@@ -50,6 +51,19 @@ func (p *provider) login(ctx context.Context, code string, f *flow) (*rp.Token, 
 // API, or its WebDAV, as f says.
 func (p *provider) buy(ctx context.Context, rt string, f rp.For) (*rp.Token, error) {
 	return p.c.Refresh(ctx, rt, f)
+}
+
+// revoke ends a refresh token at the provider (RFC 7009), when it advertises a
+// revocation_endpoint: "revoked", "unsupported" (it has none) or "failed".
+func (p *provider) revoke(ctx context.Context, refresh string) (string, error) {
+	switch err := p.c.Revoke(ctx, refresh, rp.RefreshTokenHint); {
+	case err == nil:
+		return "revoked", nil
+	case errors.Is(err, rp.ErrNoRevocation):
+		return "unsupported", nil
+	default:
+		return "failed", err
+	}
 }
 
 // endSession is where to end the session at the provider, or "".

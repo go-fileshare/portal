@@ -45,6 +45,7 @@ session {
   key_files        = ["/etc/portal/session.key"]   # openssl rand -base64 32 > session.key; chmod 600
   lifetime         = "8h"                          # from the login, however active
   max_cookie_bytes = 7600                          # see "Cookies" below
+  revocations_file = "/var/lib/portal/revoked"     # logouts that last: see "Logout" below
 }
 
 issuer "https://login.example.org" {
@@ -104,6 +105,9 @@ and exits.
 - a server with neither `resource` nor `scope`: its token would carry the
   client's default audience, and a token addressed to several servers can be
   replayed by any of them to the others (RFC 8707 §3);
+- two servers with one audience (the same `resource`, `dav_resource` or
+  `scope`, however spelled): the token bought for one would be valid at the
+  other, which its administrators could replay there (since v0.4.0);
 - a secret file that others may read, a session key that is not 32 bytes;
 - a provider whose discovery document names another issuer, or that offers
   PKCE without S256;
@@ -249,6 +253,24 @@ half stored.
 **Session keys.** The first key in `key_files` seals; every key opens. To
 replace one, put the new key first, deploy it everywhere, and remove the old
 key once every session sealed with it has expired (`lifetime`).
+
+## Logout {#logout}
+
+A session is sealed in the cookie, so a copy of the cookie taken before a logout
+would open it again until the login's end. Since v0.4.0 every session has an id
+and a logout does three things: it clears the cookies, it **puts the id in a
+revocation set** that every request consults, and it **revokes the refresh
+token at the provider** (RFC 7009) when the provider advertises a
+`revocation_endpoint` (the answer says `refresh_token`: `revoked`,
+`unsupported` or `failed`, and `session_revoked`). `revocations_file` keeps the
+set on disk (appended and synced before the logout answers, entries dropped
+after their session's end, mode 0600), so a logout survives a restart exactly as
+the sessions do; copies of the portal sharing the file see each other's logouts
+within a second. Without it the set is in memory and a restart forgets it (the
+portal says so at start). The set holds at most 100000 logouts still within
+their lifetime; past that a logout is reported `session_revoked: false`.
+**Upgrading from v0.3.x ends every session**: one without an id is refused, and
+people log in again.
 
 ## Cross-site requests
 

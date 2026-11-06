@@ -74,6 +74,9 @@ func listen(ctx context.Context, cfg *config, client *http.Client) (*http.Server
 	if err != nil {
 		return nil, nil, err
 	}
+	if cfg.Session.RevocationsFile == "" {
+		p.logf("session: no revocations_file: a logout ends the session until the portal restarts, no longer; set session { revocations_file = \"...\" }")
+	}
 	srv := &http.Server{
 		Handler:           p.handler(),
 		ReadHeaderTimeout: 10 * time.Second,

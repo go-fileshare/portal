@@ -107,8 +107,9 @@ func TestReadKey(t *testing.T) {
 func TestSessionChunks(t *testing.T) {
 	s, _ := newSealer([][]byte{bytes.Repeat([]byte{1}, 32)})
 	now := time.Now()
-	ss := &sessions{sealer: s, now: func() time.Time { return now }, limit: maxChunks * chunkSize}
-	big := &session{Issuer: "i", Subject: "s", Expires: now.Add(time.Hour), Refresh: "rt", Tokens: map[string]accessToken{}}
+	rev, _ := newRevocations("", func() time.Time { return now })
+	ss := &sessions{sealer: s, now: func() time.Time { return now }, limit: maxChunks * chunkSize, revoked: rev}
+	big := &session{ID: newSessionID(), Issuer: "i", Subject: "s", Expires: now.Add(time.Hour), Refresh: "rt", Tokens: map[string]accessToken{}}
 	for i := range 8 {
 		big.Tokens[fmt.Sprint(i)] = accessToken{Token: strings.Repeat("t", 1000), Expires: now}
 	}
@@ -133,7 +134,7 @@ func TestSessionChunks(t *testing.T) {
 	}
 	// Shrunk: the chunks past the new end are cleared.
 	rec = httptest.NewRecorder()
-	small := &session{Issuer: "i", Subject: "s", Expires: now.Add(time.Hour)}
+	small := &session{ID: newSessionID(), Issuer: "i", Subject: "s", Expires: now.Add(time.Hour)}
 	if err := ss.write(rec, r, small); err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +186,10 @@ func TestSessionChunks(t *testing.T) {
 func TestRefreshTooManyServers(t *testing.T) {
 	w := newWorld(t, func(w *world, b *strings.Builder) {
 		for i := range 20 {
-			fmt.Fprintf(b, "server \"x%d\" {\n url = %q\n issuer = %q\n resource = %q\n}\n", i, w.a.srv.URL, w.idp.issuer, w.a.resource)
+			// Each server has an audience of its own (a duplicate is refused at load).
+			res := fmt.Sprintf("%s/x%d", w.a.resource, i)
+			w.idp.resources = append(w.idp.resources, res)
+			fmt.Fprintf(b, "server \"x%d\" {\n url = %q\n issuer = %q\n resource = %q\n}\n", i, w.a.srv.URL, w.idp.issuer, res)
 		}
 	})
 	b := w.browser()
