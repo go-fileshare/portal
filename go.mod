@@ -3,9 +3,9 @@ module github.com/go-fileshare/portal
 go 1.27.4
 
 require (
-	github.com/go-authn/oidc v0.7.0
-	github.com/go-authn/rp v0.4.0
-	github.com/go-authn/servercert v0.7.0
+	github.com/go-authn/oidc v0.8.1
+	github.com/go-authn/rp v0.5.1
+	github.com/go-authn/servercert v0.7.1
 	github.com/hashicorp/hcl/v2 v2.25.0
 )
 
@@ -13,6 +13,7 @@ require (
 	github.com/agext/levenshtein v1.2.1 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/apparentlymart/go-textseg/v17 v17.0.1 // indirect
+	github.com/go-authn/harden v0.1.0 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/zclconf/go-cty v1.19.0 // indirect
